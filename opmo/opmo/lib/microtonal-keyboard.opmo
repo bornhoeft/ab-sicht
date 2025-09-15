@@ -1,0 +1,24 @@
+
+;;; Midi Keyboard
+;;; Midi Numbers 36 - 96 (c2 c7)
+
+;;; Quartertones
+
+(defun key-to-quarter (key &key (center-midi 60))
+  "convert a midi-key to the sounding quarter-note (midi)."
+  (+ center-midi (/ (- key center-midi) 2.0)))
+
+;; (key-to-quarter 36) sounding pitch 48 
+;; (key-to-quarter 37) sounding pitch 48.5 
+;; (key-to-quarter 72) sounding pitch 66
+
+(defun quarter-to-key (quartertone &key (center-midi 60))
+  "convert a quartertone to the associated key on a quartertone keyboard"
+  (nth-value 0 
+             (floor 
+              (+ center-midi 
+                 (* (- quartertone center-midi) 2)))))
+
+;; (quarter-to-key 48) midi-key 36 
+;; (quarter-to-key 48.5) midi-key 37
+;; (quarter-to-key 66) midi-key 72

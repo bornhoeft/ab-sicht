@@ -1,0 +1,32 @@
+;; gen-integer-step could be adapted in the following way:
+
+;; change variable n to keyword
+(gen-integer-step 0 '(1 -2 3 1)) 
+;; => (0 1 -1 2 3) - only the intervals given in step list
+(gen-integer-step 0 '(1 -2 3 1) :repeat 12) 
+;; (1 -1 2 3 4 2 5 6 7 5 8 9)) only the intervals as loop
+(gen-integer-step 0 '(1 -2 3 1) :repeat 12 :init t) 
+;; => (0 1 -1 2 3 4 2 5 6 7 5 8 9)) with start point (0)
+(gen-integer-step 0 '(1 -2 3 1) :repeat 12 :last t) 
+;; => (0 1 -1 2 3 4 2 5 6 7 5 8) stick to last interval
+
+
+(defun dx-x (ls &optional (st 0))
+  "Constructs a list of numbers from <start> with the consecutives intervals of <ls>.
+  <ls> can also be a list of lists of intervals. Used convert rhythms to entry points."
+  (labels ((dx-x-fun (ls &optional (st 0))
+             (let ((r st))     
+               (loop for i in ls
+                 for n = (+ r i)
+                 collect n into reslis
+                 do (setf r n)
+                 finally (return (cons st reslis))))))
+    (if (numberp (first ls))
+      (dx-x-fun ls st)
+      (loop for i in ls collect (dx-x-fun i st)))))
+
+;; (dx-x '(0.5 0.5 0.25 0.25 0.25 0.3)) => (0 0.5 1.0 1.25 1.5 1.75 2.05)
+;; (dx-x '(0.5 0.5 0.25 0.25 0.25 0.3) 3) => (3 3.5 4.0 4.25 4.5 4.75 5.05)
+;; (dx-x '((0.5 0.5) (0.25 0.25 0.25 0.3)) 3) => ((3 3.5 4.0) (3 3.25 3.5 3.75 4.05))
+
+

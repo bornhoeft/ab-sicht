@@ -1,0 +1,114 @@
+;;; ---------------------------------------------------------
+;;; Sicht
+;;; Copyright © 2015-2021 Achim Bornhoeft
+;;; ---------------------------------------------------------
+
+(load (merge-pathnames "../lisp/functions.lisp" *load-truename*))
+
+;; ratio list
+(let ((lis '(9/7 8/6 7/5 6/4 5/3)))
+  (loop for i in lis
+    collect (* i 1.0)))
+
+;; * 2 & (+ denominator 1)
+(let ((lis '(18/15 16/13 14/11 12/9 10/7)))
+  (loop for i in lis
+    collect (* i 1.0)))
+
+;; * 2 & (- denominator 1)
+(let ((lis '(18/13 16/11 14/9 12/7 10/5)))
+  (loop for i in lis
+    collect (* i 1.0)))
+
+;; * 3 & (+ denominator 1)
+(let ((lis '(27/22 24/19 21/16 18/13 15/10)))
+  (loop for i in lis
+    collect (* i 1.0)))
+
+;; * 3 & (- denominator 1)
+(let ((lis '(27/20 24/17 21/14 18/11 15/9)))
+  (loop for i in lis
+    collect (* i 1.0)))
+
+;;; Used Ratios in "Plain"
+
+;; ratios on g3, ratios around 1.5
+(loop for i in '(5/3 4/3 3/2 11/7 5/3) collect (* 1.0 i))
+;; (1.6666666 1.3333334 1.5 1.5714285 1.6666666)
+
+;; ratios on d4, ratios around 1.5
+(loop for i in '(7/4 21/13 3/2 9/7 7/4) collect (* 1.0 i))
+;; (1.75 1.6153846 1.5 1.2857143 1.75)
+
+;;; Used Ratios in "Limbus"
+
+(defparameter limbus1
+'((5/4 3/2) (6/5 7/5 8/5) (7/6 4/3 3/2 5/3) (8/7 9/7 10/7 11/7 12/7) (9/8 5/4 11/8 3/2 13/8 7/4) (10/9 11/9 4/3 13/9 14/9 5/3 16/9) (11/10 6/5 13/10 7/5 3/2 8/5 17/10 9/5)))
+
+(defparameter limbus2
+'((7/4 3/2) (9/5 8/5 4/3) (11/6 5/3 5/3 9/7) (13/7 12/7 11/7 11/8 5/4) (15/8 7/4 13/8 3/2 4/3 11/9) (17/9 16/9 5/3 14/9 7/5 13/10 6/5)))
+
+(defparameter ratio-lst (flatten (matrix-transpose (list limbus1 limbus2))))
+
+;; (list-plot ratio-lst :zero-based t :point-radius 2 :join-points t)
+
+;; sorted (duplicates removed)
+(let ((rl (remove-duplicates (sort ratio-lst '<))))
+  (loop for i in rl
+    collect (list i (* i 1.0)))) 
+;; range between >=1.25 and <= 1.88
+
+;;; ratios on cs5 (reciprocal of ratio-list)
+(defparameter reciproc-ratio-lst
+  (reverse
+   '(4/5 2/3 4/7 2/3 5/6 5/7 5/8 5/9 5/8 3/4 6/7 3/4 2/3 3/5 6/11 3/5 7/10 7/9 7/8 7/9 7/10 7/11 7/12 7/13 7/12 7/11 8/11 4/5 8/9 4/5 8/11 2/3 8/13 4/7 8/15 4/7 8/13 2/3 3/4 9/11 9/10 9/11 3/4 9/13 9/14 3/5 9/16 9/17 9/16 3/5 9/14 5/7 10/13 5/6 10/11 5/6 10/13 5/7 2/3 5/8 10/17 5/9)))
+
+;; (list-plot reciproc-ratio-lst :zero-based t :point-radius 2 :join-points t)
+
+;; sorted (duplicates removed
+(let ((rl (remove-duplicates (sort reciproc-ratio-lst '<))))
+  (loop for i in rl
+    collect (list i (* i 1.0))))
+;; range between >0.5 and <1 on cs5 
+
+(defparameter ratios
+  (append ratio-lst reciproc-ratio-lst))
+
+(chordize 
+ (hertz-to-pitch
+  (loop for i in ratios
+    with f1 = (pitch-to-hertz 'd4)
+    for f2 = (* f1 i)
+    collect (list f1 f2))))
+
+(defparameter rat
+ (loop for i from 1 to 20
+  collect
+  (loop for j from i to (- (* 2 i) 1)
+    collect (/ i j))))
+
+
+(defmacro sort-lsts (lists &key (sort-id 'first))
+  `(sort (copy-seq ,lists) #'< :key #',sort-id))
+
+(defparameter rat-rev-plot
+  (sort-lsts
+ (loop for i from 1 to 20
+  append
+  (loop for j from i to (* 2 i)
+    for k = (/ j i)
+    collect (list k  (* k 1.0))))))
+
+
+(defparameter rat-rev
+     (remove nil
+ (loop for i from 1 to 20
+  collect
+  (loop for j from i to (* 2 i)
+    for k = (/ j i)
+    when (and (>= k 5/4) (<= k 7/4))
+    collect k))))
+
+;; (loop for i in (flatten rat-rev) collect (* i 1.0))
+;; (list-plot (flatten rat-rev) :zero-based t :point-radius 2 :join-points t)
+

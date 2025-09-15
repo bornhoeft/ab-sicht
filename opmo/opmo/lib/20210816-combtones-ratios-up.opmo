@@ -1,0 +1,229 @@
+;;; ---------------------------------------------------------
+;;; Sicht
+;;; Copyright © 2015-2021 Achim Bornhoeft
+;;; ---------------------------------------------------------
+
+(load (merge-pathnames "../lisp/functions.lisp" *load-truename*))
+
+(defparameter *do-verbose* nil 
+  "Enable or disable traces printed by do-verbose.")
+
+;;; Pitches
+
+;;; TODO: transitions, reduce to 5 min, reduce lower wave  ambitus
+
+(defparameter ratios>1 
+  (remove nil
+          (loop for i from 13 to 24
+            ; number of steps depending on limits below
+            collect
+            (if (oddp i)           
+              (loop for j from i to (* 2 i)
+                ; odd IDs increasing ratios
+                for k = (/ j i)
+                when (and (>= k 3/2) (<= k 7/4))
+                collect k)
+              (loop for j from (* 2 i) downto i
+                ; even IDs decreasing ratios
+                for k = (/ j i)
+                when (and (>= k 3/2) (<= k 7/4))
+                collect k)))) 
+
+  "Ratios = Intervals between f2 and f1.
+  All ratios between 1.5 and 1.75, odd denominator increasing 
+  and even denominator decreasing: form with tendencially increasing 
+  length of waves: 3 to 7 steps.")
+
+#|
+(let ((mcr (flatten ratios>1)))
+  (list  (* 1.0 (find-min mcr)) (* 1.0 (find-max mcr))))
+;; => min/max ratios
+
+;;; TODO: balance waves with transitions?
+(loop for i in ratios>1 collect (length i))
+;; => tendencially increasing length of waves
+|#
+
+(defparameter ratios
+  (loop
+  with *do-verbose* = nil
+  with l = (flatten ratios>1)
+  with trans = '(3) ; list of transitions
+  for i in l ; first value
+  for j in (cdr l) ; second value
+  for x from 0 ; counter variable
+  for m = (mod x (length trans)) ; loop trans
+  collect (cdr (gen-transition i j (nth m trans) 1)) into reslis
+  ; cut off the first value because its the last of the previous one
+  finally (return (append 
+                   (list (cons (first l) (first reslis)))
+                   ; add the first value to the first list
+                   (cdr reslis)
+                   ; and append it to the rest of the results
+                   )))
+  "Ratios: = Intervals between f2 and f1.
+  Inserted transitions between each value in ratios>1.")
+  
+(defparameter freq1 (pitch-to-hertz 'd4)
+  "Fixed f1 frequency")
+
+(defparameter combtones-chords
+ (comb-tones freq1 (flatten ratios) 2 3 :ratios t :chords t)
+  "Combination tones for f1 and each ratio as list of freqs")
+
+;;; TODO: check which pitch is f2
+;; (comb-tones 100 '(2/1) 1 2 :ratios t :chords t)
+
+(defparameter pitches
+  (pitch-list-plot
+  (reverse
+   (hertz-to-pitch
+    (sort
+     (matrix-transpose
+      (loop for i in combtones-chords
+        collect
+        (loop for j in i collect j)))         
+     '< :key 'first) :quantize 1/4))
+  :join-chords t :join-points t)
+  "
+  1. convert the list of combination tones to voices
+  2. sort them from low to high
+  3. convert from frequency to pitch
+  4. reverse these lists according to the score")
+
+(defparameter numb-pitches (length combtones-chords)
+  "number of pitches per voice")
+
+(defparameter numb-inst (length pitches)
+  "number of instruments (voices)")
+
+;;; Durations
+
+(defparameter dur3 '((3/4)))
+(defparameter dur4 '((4/4)))
+(defparameter dur5 '((5/4)))
+
+(defparameter dur9 
+  (dev-durations 3/4 '(16 20) '(-1 1) :flat nil)
+  "3/4 duration with 2 deviations")
+
+(defparameter dur6 
+  (mapcar #'cdr (dev-durations 3/4 '(16 20) '(-1 1) :flat nil))
+  "only the deviations of 3/4")
+
+(defparameter dur12 
+  (dev-durations 4/4 '(12 16 20) '(-1 1) :flat nil)
+  "4/4 duration with 3 deviations")
+
+(defparameter dur8 
+  (mapcar #'cdr (dev-durations 4/4 '(12 16 20) '(-1 1) :flat nil))
+  "only the deviations of 4/4")
+
+(defparameter dur15 
+  (dev-durations 5/4 '(10 12 16 20) '(-1 1) :flat nil)
+  "5/4 duration with 4 deviations")
+
+(defparameter dur10 
+  (mapcar #'cdr (dev-durations 5/4 '(10 12 16 20) '(-1 1) :flat nil))
+  "only the deviations of 5/4")
+
+(defparameter measures
+  (rnd-sum numb-pitches '(1 2 3) :seed 12)
+  "3 durs randomly chosen fitting the  overall number of pitches")
+
+(defparameter durs
+(matrix-transpose
+ (loop for i in measures
+   initially (init-seed 13)
+   with *do-verbose* = nil
+   ; starting counter for all random choices
+   for x = (case i
+             (1 (rnd-pick (append dur3 dur4 dur5)))
+             (2 (rnd-pick (append dur6 dur8 dur10)))
+             (3 (rnd-pick (append dur9 dur12 dur15))))
+   collect (loop repeat numb-inst
+     collect (rnd-order x))))
+  "durations in blocks between dur3 and dur15")
+
+(defparameter durations (mcflatten durs))
+
+(ll durations)
+
+(defparameter time-sig
+  (get-time-signature
+   (mclist
+    (flatten
+     (loop for i in (first durs) 
+       for j = (length i) 
+       collect
+       (loop repeat j collect (/ (sum i) j))))))  
+  "get the time signature from the first voice")
+
+;;; Dynamics
+;;; TODO: see. @tests.opmo
+
+;;; Articulations
+;;; (list of possible articulations see User Attributes.lisp)
+;;; TODO: weighted distribution
+
+(defparameter articulations
+  (loop repeat numb-inst
+    initially (init-seed 25)
+    with *do-verbose* = nil
+    with len = numb-pitches
+    for tremolos = (rnd-sample len '(trem-7e+tr7e - - -))
+    for vibratos = (rnd-sample len '(vib non-vib))
+    collect (merge-attributes tremolos vibratos)))
+
+(ll articulations)
+ 
+;;; Voices
+    
+(defparameter omn
+  (make-omn
+   :pitch pitches
+   :length durations
+   :articulation articulations))
+
+(defparameter voices (assign-variable 'voice omn)
+  "assign variable for each voice")
+
+;;; Score
+
+#!
+
+;; Preview
+
+(ps 'gm
+    :multi voices
+    :time-signature time-sig
+    :tempo 60)
+!#
+
+(def-score ratios>1
+           (
+            :key-signature 'chromatic
+            :time-signature time-sig
+            :tempo 60
+            :layout (list
+                       (bracket-group
+                        (flute-layout 'bfl)
+                        (oboe-layout 'ob))
+                       (bracket-group
+                        (violin-solo-layout 
+                         (list 'vn-v1 'vn-v2))
+                        (viola-solo-layout 
+                         (list 'va-v1 'va-v2))
+                        (violoncello-solo-layout 
+                         (list 'vc-v1 'vc-v2))))
+            ) 
+
+  (bfl :omn voice0 :channel 1 :sound 'gm :program 'flute) 
+  (ob :omn voice3 :channel 2 :program 'oboe) 
+  (vn-v1 :omn voice1 :channel 3 :program 'violin) 
+  (vn-v2 :omn voice2 :channel 3 :program 'violin)
+  (va-v1 :omn voice4 :channel 4 :program 'viola) 
+  (va-v2 :omn voice5 :channel 4 :program 'viola)
+  (vc-v1 :omn voice6 :channel 5 :program 'cello)
+  (vc-v2 :omn voice7 :channel 5 :program 'cello)
+  )

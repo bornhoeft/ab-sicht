@@ -1,0 +1,12 @@
+("workspace-view/current"
+ "opmo/20211212-zwischen.opmo"
+)
+
+("workspace-view/history"
+ (("pd/qlists.opmo" "qlists.opmo") ("@zeichenerklärung-anleitung.txt" "@zeichenerklärung-anleitung.txt") ("opmo/20211212-zwischen.opmo" "20211212-zwischen.opmo") ("lisp/functions.lisp" "functions.lisp") ("opmo/20211210-dunkel.opmo" "20211210-dunkel.opmo"))
+)
+
+("workspace-view/layout-ratios"
+ (1 (OM-CAPI::MAIN 312 NIL 1057) (OM-CAPI::EDITOR-AND-LISTENER-LAYOUT 674 NIL 210))
+)
+

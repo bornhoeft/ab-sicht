@@ -1,0 +1,13 @@
+Zeichenerklärung
+
+Opusmodus:
+Grafik des Snippets anklicken und ein rtfd Dokument einfügen
+
+PDF:
+1. Öffne PDF in Vorschau
+2. Crop Image in PDF (cmd-K)
+3. Miniaturansicht öffnen
+4. Beschnittene Grafik aus der Miniaturansicht ziehen (drag&drop)
+5. PDF Grafik in Vorschau öffnen
+6. Exportieren als PNG (300 DPI)
+7. Einsetzen in LibreOffice Dokument (ODT) über Einsetzen => Bild

@@ -1,0 +1,132 @@
+;;---------------------------------------------------------
+;;; AB93 - Plain
+;;; Copyright © 2015-2020 Achim Bornhoeft
+;;;--------------------------------------------------------
+
+(load (merge-pathnames "functions.lisp" *load-truename*))
+
+;;; g2 structure, 4 x 3 (12) quarter
+
+#|
+"rhy (or list of rhythms) is shifted randomly between quantized low and high in dur. 
+  dur = duaration of segment, rhy = rhythmic value(s) shifted in dur,
+  low = lowest shift value, high = highest shift value, 
+  quant = number or list of possible quantisations for shift
+  rests = distibution of rests and notes, 
+  quarter = if t durations are divided by 4
+  seed = random seed value."
+
+:rests
+0  note - note(s) - note
+1  rest - note(s) - note
+2  note - rest(s) - note
+3  note - note(s) - rest
+4  rest - rest(s) - note
+5  rest - note(s) - rest
+6   note - rest(s) - rest
+|#
+
+(setf bsax-durs (loop repeat 4
+                    initially (rnd-seed 123)
+                    append                 
+                    (rhythm-shift 5 1 1 1.5 '(1/2 1/4) 
+                                  :quarter t :rests 0 :seed (seed))))
+
+(setf bcl-durs (loop repeat 4
+                    initially (rnd-seed 2)
+                    append                 
+                    (rhythm-shift 5 1.5 0.5 1.5 '(1/2 1/4) 
+                                  :quarter t :rests 0 :seed (seed))))
+
+(setf gong-durs (loop repeat 4
+                    initially (rnd-seed 11)
+                    append                 
+                    (rhythm-shift 5 0.5 2.5 3.5 '(1/2) 
+                                  :quarter t :rests 5 :seed (seed))))
+
+(setf timp-durs (loop repeat 4
+                    initially (rnd-seed 13)
+                    append                 
+                    (rhythm-shift 5 2 0.5 1 '(1/2 1/4) 
+                                  :quarter t :rests 1  :seed (seed))))
+
+(setf pno-durs1 (loop repeat 4
+                    initially (rnd-seed 7)
+                    append                 
+                    (rhythm-shift 5 0.5 0 0.5 '(1/2 1/4) 
+                                  :quarter t :rests 5 :seed (seed))))
+
+(setf pno-durs2 (loop repeat 4
+                    initially (rnd-seed 12)
+                    append                 
+                    (rhythm-shift 5 1.25 1 1.5 '(1/2 1/4) 
+                                  :quarter t :rests 2 :seed (seed))))
+
+(setf vc-durs1 (loop repeat 4
+                    initially (rnd-seed 3)
+                    append                 
+                    (rhythm-shift 5 1.5 0.5 2 '(1/2 1/4) 
+                                  :quarter t :rests 0 :seed (seed))))
+
+(setf vc-durs2 (loop repeat 4
+                    initially (rnd-seed 3)
+                    append                 
+                    (rhythm-shift 5 1.75 0.5 1.5 '(1/2 1/4) 
+                                  :quarter t :rests 0 :seed (seed))))
+
+(setf durations (list bsax-durs 
+                         bcl-durs
+                         gong-durs 
+                         timp-durs 
+                         pno-durs1
+                         pno-durs2
+                         vc-durs1
+                         vc-durs2))
+
+(setf mat (make-omn
+           :pitch '(g2)
+           :length durations
+           :velocity '(ppp)))
+
+(setf sets (set-assignment 'mat mat))
+
+(progn
+  (def-score g2-rhythm-shift-5
+             (
+              :key-signature 'chromatic
+              :time-signature '(5 4)
+              :tempo 60
+              :layout (list
+                       (bracket-group
+                        (baritone-sax-layout 'bsax)
+                        (bass-clarinet-layout 'bcl))
+                       (bracket-group
+                        (bass-layout 'gong :name "Gong" :abbr "Gng")
+                        (bass-layout 'timp :name "Timpani" :abbr "Tmp"))
+                       (piano-layout 'pno-rh 'pno-lh)
+                       (bracket-group
+                        (violoncello-layout* (list 'vc-v1 'vc-v2))))
+              )
+    
+    (bsax :omn mat0 :channel 1 :sound 'gm :program 'baritone-sax) 
+    (bcl :omn mat1 :channel 2 :program 'clarinet) 
+    (gong :omn mat4 :channel 3 :program 'vibraphone) 
+    (timp :omn mat3 :channel 4 :program 'timpani)
+    (pno-rh :omn mat2 :channel 5 :program 'Bright-Acoustic-Piano)
+    
+    (pno-lh :omn mat6 :channel 6 :program 'Bright-Acoustic-Piano)
+    (vc-v1 :omn mat5 :channel 7 :program 'Cello)
+    (vc-v2 :omn mat7 :channel 8 :program 'cello) 
+    )
+  (audition-musicxml-last-score)
+  )
+
+(display-musicxml 'g2-rhythm-shift-5)
+
+#|
+(with-open-file (file "~/Documents/projekte/03-kammermusik5-9/AB93-Plain/opmo/xml/g2-rhythm-shift-5.xml" :direction :output :if-exists :supersede)
+  (score-to-musicxml (get-score 'g2-rhythm-shift-5) file))
+|#
+
+
+;; (display-midi (compile-score 'g2-rhythm-shift-5))

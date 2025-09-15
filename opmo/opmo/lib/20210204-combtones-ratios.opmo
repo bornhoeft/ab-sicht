@@ -1,0 +1,139 @@
+;;; ---------------------------------------------------------
+;;; Sicht
+;;; Copyright © 2015-2021 Achim Bornhoeft
+;;; ---------------------------------------------------------
+
+(load (merge-pathnames "../lisp/functions.lisp" *load-truename*))
+
+(defparameter ratios-up-BAK
+  (remove nil
+          (loop for i from 13 to 36 
+            ; number of steps depending on limits below
+            collect
+            (if (oddp i)           
+              (loop for j from i to (* 2 i)
+                ; odd IDs increasing ratios
+                for k = (/ j i)
+                when (and (>= k 5/4) (<= k 7/4))
+                collect k)
+              (loop for j from (* 2 i) downto i
+                ; even IDs decreasing ratios
+                for k = (/ j i)
+                when (and (>= k 5/4) (<= k 7/4))
+                collect k)))) 
+    "All ratios between 1.25 and 1.75, odd denominator increasing 
+  and even denominator decreasing: form with tendencially increasing 
+  length of waves: 6 to 19 steps.")
+
+(defparameter ratios-up 
+  (remove nil
+          (loop for i from 13 to 24
+            ; number of steps depending on limits below
+            collect
+            (if (oddp i)           
+              (loop for j from i to (* 2 i)
+                ; odd IDs increasing ratios
+                for k = (/ j i)
+                when (and (>= k 4/3) (<= k 5/3))
+                collect k)
+              (loop for j from (* 2 i) downto i
+                ; even IDs decreasing ratios
+                for k = (/ j i)
+                when (and (>= k 4/3) (<= k 5/3))
+                collect k)))) 
+    "All ratios between 1.25 and 1.75, odd denominator increasing 
+  and even denominator decreasing: form with tendencially increasing 
+  length of waves: 6 to 19 steps.")
+
+;; all ratios between 1.25 (5/4) and 1.75 (7/4)
+(let ((mcr (flatten ratios-up)))
+  (list  (* 1.0 (find-min mcr)) (* 1.0 (find-max mcr))))
+
+;; tendencially increasing length of waves
+(loop for i in ratios-up collect (length i))
+;; (6 7 8 9 8 9 10 11 10 11 12 13 12 13 14 15 14 15 16 17 16 17 18 19)
+
+;; (length (flatten ratios-up)) => 300 ratios
+
+(defparameter ratios-down
+  (remove nil
+          (loop for i from 16 to 33
+            ; number of steps depending on limits below
+            collect
+            (if (oddp i) 
+              (loop for j from i to (* 2 i)
+                ; odd IDs increasing ratios
+                for k = (/ i j)
+                when (and (>= k 5/9) (<= k 8/9))
+                collect k)
+              (loop for j from (* 2 i) downto i
+                ; even IDs decreasing ratios
+                for k = (/ i j)
+                when (and (>= k 5/9) (<= k 8/9))
+                collect k))))
+  "All ratios between 0.5555556 (5/9) and 0.8888889 (8/9), odd 
+  numerators increasing and even numerators decreasing: form with 
+  tendencially increasing length of waves: 11 to 22 steps.")
+
+;; all ratios between 0.5555556 (5/9) and 0.8888889 (8/9)
+(let ((mcr (flatten ratios-down)))
+  (list  (* 1.0 (find-min mcr)) (* 1.0 (find-max mcr))))
+
+;; tendencially increasing length of waves
+(loop for i in ratios-down collect (length i))
+;; (11 11 12 13 14 14 15 16 17 17 17 18 19 20 21 21 22 22)
+
+;; (length (flatten ratios-down)) => 300 ratios
+
+(defparameter freq1 (pitch-to-hertz 'd4))
+
+(defparameter combtones-chords
+ (comb-tones freq1 (flatten ratios-up) 2 3 :ratios t :chords t))
+
+#|
+;;; sort all lowest to all highest
+(defparameter pitches
+  (reverse
+  (matrix-transpose
+  (hertz-to-pitch
+  (loop for i in combtones-chords
+    collect
+    (sort
+    (loop for j in i
+      when (>= j 17) collect j) '<))))))
+|#
+
+(ft '(2 (1) 3 4 (2 (3 4)3)))
+
+;;; sort to voices
+(defparameter pitches
+  (reverse
+   (hertz-to-pitch
+    (sort
+     (matrix-transpose
+      (loop for i in combtones-chords
+        collect
+        (loop for j in i
+          when (>= j 17) collect j))) 
+     '< :key 'first) :quantize 1/4)))
+
+;; (pitch-list-plot pitches :join-chords t :join-points t)
+
+(defparameter articulations
+  (loop for i in pitches
+    with lp = (length (first pitches))
+    for tremolos = (rnd-sample lp '(trem - - -))
+    for vibratos = (rnd-sample lp '(vib non-vib))
+    collect (merge-attributes tremolos vibratos)))
+    
+(defparameter voices
+  (make-omn
+   :pitch pitches
+   :length '(1)
+   :articulation articulations
+   :span :pitch))
+
+(ps 'gm
+    :multi voices
+    :time-signature '(4 4)
+    :tempo 240) 

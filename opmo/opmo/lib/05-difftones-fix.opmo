@@ -1,0 +1,104 @@
+;;; ---------------------------------------------------------
+;;; Sicht
+;;; Copyright © 2015-2021 Achim Bornhoeft
+;;; ---------------------------------------------------------
+
+;;; Structure for fade in and out of chords on a fixed difference tone
+
+(load (merge-pathnames "../lisp/functions.lisp" *load-truename*))
+
+;; durations per measure          
+(setf durs 
+      ;; (rnd-order : random order of durations per measure
+            (loop 
+             for i in '(2 2 1 2)
+             for j in '(1 1 1 1)
+             for k in '(2 1 1 2)
+             collect (fade-io (list i j k) 8 1 1)))
+
+;; make voices from durations per measure
+(setf durations (matrix-transpose durs)) 
+
+;; difference tone 
+(defparameter diff (pitch-to-hertz 'c2))
+
+;; factors of diff as relations between diff and freq1
+(defparameter freq1
+  (rnd-order
+  ;;(rnd-order : in random order of chords with difference tones
+  (gen-transition 4 5 (length durs) 1) :seed 123))
+
+;; (hertz-to-pitch (loop for i in freq1 collect (* diff i)) :quantize 1/4)
+
+;; difference tones (doubled for notation)
+(setf diff-tones
+      (matrix-transpose ; to collect doubled pitches into voices
+      (loop for i in freq1 
+        for dt = (sort (diff-fix-tones diff (* diff i) 1 3) '>) ; sorted for instrumentaion
+        collect (matrix-transpose (list dt dt))))) ; matrix-transpose to combine equal pitches
+
+;; quantize pitches to quartertones 
+(setf pitches
+      (hertz-to-pitch
+        (flatten
+         diff-tones)
+              :quantize 1/4))
+
+;; make omn-voices
+(setf voices (make-omn
+              :pitch pitches
+              :length (mcflatten durations)
+              :velocity '(pp< p>pp)
+              :articulation '(tie)))
+
+;; assign variable for each voice
+(setf voices (assign-variable 'voice voices))
+
+;; time signatures from first voice
+(setf ts (get-time-signature (first durations)))
+
+#!
+;; see GM Instrument Set.lisp for list of available instruments
+(ps 'gm
+    :fl (list voice0)
+    :ob (list voice1)
+    :vn* (list voice2 voice3)
+    :va* (list voice4 voice5)
+    :vc* (list voice6 voice7)
+    :time-signature ts)
+!#
+
+(progn
+  (def-score fade-in-out4
+             (
+              :key-signature 'chromatic
+              :time-signature ts
+              :tempo 60
+              :layout (list
+                       (bracket-group
+                        (flute-layout 'bfl)
+                        (oboe-layout 'ob))
+                       (bracket-group
+                        (violin-layout* (list 'vn-v1 'vn-v2))
+                        (viola-layout* (list 'va-v1 'va-v2))
+                        (violoncello-layout* (list 'vc-v1 'vc-v2))))
+              )
+    
+    (bfl :omn voice3 :channel 1 :sound 'gm :program 'flute) 
+    (ob :omn voice0 :channel 2 :program 'oboe) 
+    (vn-v1 :omn voice1 :channel 3 :program 'violin) 
+    (vn-v2 :omn voice2 :channel 3 :program 'violin)
+    (va-v1 :omn voice5 :channel 4 :program 'viola) 
+    (va-v2 :omn voice4 :channel 4 :program 'viola)
+    (vc-v1 :omn voice6 :channel 5 :program 'cello)
+    (vc-v2 :omn voice7 :channel 5 :program 'cello)
+    )
+  (audition-musicxml-last-score)
+  )
+
+#|
+(with-open-file (file "~/Documents/projekte/03-kammermusik5-9/AB93-Plain/opmo/xml/fade-in-out4.xml" :direction :output :if-exists :supersede)
+  (score-to-musicxml (get-score 'fade-in-out4) file))
+|#
+
+;; (pprint-score 'fade-in-out4)

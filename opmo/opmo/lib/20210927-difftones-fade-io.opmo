@@ -1,0 +1,237 @@
+;;; ---------------------------------------------------------
+;;; Sicht
+;;; Copyright © 2015-2021 Achim Bornhoeft
+;;;
+;;; zwischen
+;;;
+;;; ---------------------------------------------------------
+
+(load (merge-pathnames "../lisp/functions.lisp" *load-truename*))
+
+;;; Pitches
+
+#|
+6/2 - 14/2
+9/3 - 21/3
+12/4 - 28/4
+15/5 - 35/5
+18/6 - 42/6
+21/7 - 49/7
+|#
+
+(defparameter listed-ratios
+(loop for i from 2 to 7
+  collect
+    (loop 
+      with x =  (* 3 i)
+      for k from x to (* x 2)     
+      collect  (* 1.0 (/ k i)))))
+
+(defparameter sorted-ratios
+  (loop for i in listed-ratios
+    for x from 1
+    if (oddp x)
+    collect i 
+    else
+    collect (cdr (butlast (reverse i))))) 
+
+(defparameter ratios 
+  (succ-shuffle (flatten sorted-ratios) 30 :seed 123) ; see functions.lisp
+  "Flattened list of ratios with some successive values randomly shuffled.")
+
+ ;; (fl ratios) = 81  
+
+(defparameter diff (pitch-to-hertz 'g2)
+  "fixed difference tone")
+
+;;; 2 Teile:
+;;; 1. Teil mit difftone unten
+;;; 2. Teil mit difftone oben
+
+(defparameter diff-tones
+  (loop for i in 
+    (flatten sorted-ratios) 
+             collect
+             (diff-fix-tones diff (* diff i) 1 3)))
+
+#|
+(flatten (quarter-tone-closest (chordize 
+ (hertz-to-pitch
+  diff-tones
+  :quantize 1/4))))
+|#
+
+(defparameter pitches
+  (matrix-transpose
+   (quarter-tone-closest
+    (hertz-to-pitch
+     diff-tones
+     :quantize 1/4)))
+  "Quantize pitches to quartertones and convert chords to voices.") 
+
+(defparameter numb-pitches (length (first pitches)))
+;; (defparameter numb-pitches 81)
+
+(defparameter numb-inst (length (first diff-tones)))
+
+;;; Durations
+
+(defparameter parts (sum-to-size numb-pitches 3)
+  "Number of events divided in 3 possible equal numbers.")
+
+(defparameter counts
+  (loop repeat numb-inst
+    initially (init-seed 123)
+    collect
+  (loop for i in parts
+    collect
+  (rnd-sum i '(2 3 4 5))))
+  "4 counts randomly chosen fitting the overall number of events")
+
+#|
+(loop for i in measures
+  collect
+  (loop for j in i
+    collect (find-sum j)))
+|#
+
+;; durations +/- 3/4
+
+;; Count 5
+(defparameter dur3-5 
+  (dev-durations 3/4 '(16 20 24) '(-2 -1 1 2) :flat nil)
+  "duration with 4 deviations, (see functions.lisp)")
+
+;; Count 4
+(defparameter dur3-4 
+ (mapcar #'cdr dur3-5)
+  "only the deviations.")
+
+;; Count 3
+(defparameter dur3-3-1 
+  (dev-durations 3/4 '(16 20 24) '(-1 1) :flat nil)
+  "3/4 duration with 2 deviations, (see functions.lisp)")
+
+(defparameter dur3-3-2 
+  (dev-durations 3/4 '(16 20 24) '(-2 2) :flat nil)
+  "3/4 duration with 2 deviations, (see functions.lisp)")
+
+;; Count 2
+(defparameter dur3-2-1 
+  (mapcar #'cdr dur3-3-1)
+  "only the deviations")
+
+(defparameter dur3-2-2 
+  (mapcar #'cdr dur3-3-2)
+  "only the deviations")
+
+;; durations +/- 4/4
+
+;; Count 5
+(defparameter dur4-5 
+  (dev-durations 4/4 '(16 20 24) '(-2 -1 1 2) :flat nil)
+  "duration with 4 deviations, (see functions.lisp)")
+
+;; Count 4
+(defparameter dur4-4 
+ (mapcar #'cdr dur4-5)
+  "only the deviations.")
+
+;; Count 3
+(defparameter dur4-3-1
+  (dev-durations 4/4 '(16 20 24) '(-1 1) :flat nil)
+  "3/4 duration with 2 deviations, (see functions.lisp)")
+
+(defparameter dur4-3-2 
+  (dev-durations 4/4 '(16 20 24) '(-2 2) :flat nil)
+  "3/4 duration with 2 deviations, (see functions.lisp)")
+
+;; Count 2
+(defparameter dur4-2-1 
+  (mapcar #'cdr dur4-3-1)
+  "only the deviations")
+
+(defparameter dur4-2-2 
+  (mapcar #'cdr dur4-3-2)
+  "only the deviations")
+
+;; durations +/- 5/4
+
+;; Count 5
+(defparameter dur5-5 
+  (dev-durations 5/4 '(16 20 24) '(-2 -1 1 2) :flat nil)
+  "duration with 4 deviations, (see functions.lisp)")
+
+;; Count 4
+(defparameter dur5-4 
+ (mapcar #'cdr dur5-5)
+  "only the deviations.")
+
+;; Count 3
+(defparameter dur5-3-1
+  (dev-durations 5/4 '(16 20 24) '(-1 1) :flat nil)
+  "3/4 duration with 2 deviations, (see functions.lisp)")
+
+(defparameter dur5-3-2 
+  (dev-durations 5/4 '(16 20 24) '(-2 2) :flat nil)
+  "3/4 duration with 2 deviations, (see functions.lisp)")
+
+;; Count 2
+(defparameter dur5-2-1 
+  (mapcar #'cdr dur5-3-1)
+  "only the deviations")
+
+(defparameter dur5-2-2 
+  (mapcar #'cdr dur5-3-2)
+  "only the deviations")
+
+(defparameter dur-lists
+ (loop for i in counts
+   initially (init-seed 123)
+   collect
+   (loop for j in i
+   for k from 0
+   collect
+     (rnd-order
+   (loop for l in j
+     when (= k 0) collect
+     (case l
+       (2 (rnd-order (rnd-pick (append dur4-2-1 dur4-2-2))))
+       (3 (rnd-order (rnd-pick (append dur4-3-1 dur4-3-2))))
+       (4 (rnd-order (rnd-pick dur4-4)))
+       (5 (rnd-order (rnd-pick dur4-5))))
+     when (= k 1) collect
+       (case l
+       (2 (rnd-order (rnd-pick (append dur3-2-1 dur3-2-2))))
+       (3 (rnd-order (rnd-pick (append dur3-3-1 dur3-3-2))))
+       (4 (rnd-order (rnd-pick dur3-4)))
+       (5 (rnd-order (rnd-pick dur3-5))))
+     when (= k 2) collect
+       (case l
+       (2 (rnd-order (rnd-pick (append dur5-2-1 dur5-2-2))))
+       (3 (rnd-order (rnd-pick (append dur5-3-1 dur5-3-2))))
+       (4 (rnd-order (rnd-pick dur5-4)))
+       (5 (rnd-order (rnd-pick dur5-5)))))))))
+
+#|
+(loop for i in dur-lists
+  collect (find-sum (flatten i)))
+|#
+
+(defparameter durations (quantize (mcflatten dur-lists) '(1 2 3 4 5 6)))
+
+(defparameter voices
+  (reverse
+  (make-omn
+   :length durations
+   :pitch pitches)))
+
+(defparameter time-sig
+  (loop for i in sts
+    for j in '(4 3 5)
+    collect (list j 4 i)))
+
+(ps 'gm
+   :multi voices
+   :time-signature time-sig
+   :tempo 60)

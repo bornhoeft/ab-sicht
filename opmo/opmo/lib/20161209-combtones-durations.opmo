@@ -1,0 +1,44 @@
+;;; ---------------------------------------------------------
+;;; Sicht
+;;; Copyright © 2015-2021 Achim Bornhoeft
+;;; ---------------------------------------------------------
+
+;;; STRUCTURE 10
+;;; Combination Tones rhythms for PWGL
+
+(load (merge-pathnames "../lisp/functions.lisp" *load-truename*))
+
+;; rhythms for structure10.pwgl
+
+(defparameter durs3 '(3/4 3/4 3/4 3/4 3/4 11/16 13/16 14/20 16/20))
+(defparameter durs4 '(4/4 4/4 4/4 4/4 4/4 15/16 17/16 19/20 21/20))
+(defparameter durs5 '(5/4 5/4 5/4 5/4 5/4 19/16 21/16 24/20 26/20))
+
+(defparameter durs (list durs4 durs3 durs5))
+
+(defparameter duration 
+  (loop repeat 8 
+    initially (rnd-seed 123)
+    collect
+    (flatten
+     (matrix-transpose
+      (loop for i in durs                   
+        collect (rnd-order i :seed (seed)))))))
+
+;; rhythms for structure10.pwgl
+
+(defparameter durs2-2 '(2/4 2/4 2/4 2/4 2/4 7/16 9/16 9/20 11/20))
+(defparameter durs3-2 '(3/4 3/4 3/4 3/4 3/4 11/16 13/16 14/20 16/20))
+(defparameter durs4-2 '(4/4 4/4 4/4 4/4 4/4 15/16 17/16 19/20 21/20))
+(defparameter durs6-2 '(6/4 6/4 6/4 6/4 6/4 23/16 25/16 29/20 31/20))
+
+(defparameter durs-2 (list durs2-2 durs4-2 durs3-2 durs6-2))
+
+(defparameter duration 
+  (loop repeat 8 
+    initially (rnd-seed 123)
+    collect
+    (flatten
+     (matrix-transpose
+      (loop for i in durs-2                   
+        collect (rnd-order i :seed (seed)))))))

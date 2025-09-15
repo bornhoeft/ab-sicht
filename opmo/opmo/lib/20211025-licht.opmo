@@ -1,0 +1,901 @@
+;;; ---------------------------------------------------------
+;;; Sicht
+;;; Copyright © 2015-2021 Achim Bornhoeft
+;;;
+;;; licht
+;;;
+;;; ---------------------------------------------------------
+
+(load (merge-pathnames "../lisp/functions.lisp" *load-truename*))
+
+(defparameter *do-verbose* nil
+  "Enable or disable traces printed by do-verbose.")
+
+;;; Pitches
+
+(defparameter listed-ratios
+  (loop for i from 12 to 24
+    ; number of steps depending on limits below
+    collect
+    (if (oddp i)           
+      (loop for j from i to (* 2 i)
+        ; odd IDs increasing ratios
+        for k = (/ j i)
+        when (and (>= k 6/4) (<= k 7/4))
+        collect k)
+      (loop for j from (* 2 i) downto i
+        ; even IDs decreasing ratios
+        for k = (/ j i)
+        when (and (>= k 6/4) (<= k 7/4))
+        collect k))) 
+  
+  "Ratios = Intervals between f2 and f1.
+  All ratios between 1.5 and 1.75, odd denominator increasing 
+  and even denominator decreasing: form with tendencially 
+  increasing length of waves: 3 to 7 steps.")
+
+(defparameter ratios 
+  (succ-shuffle (flatten listed-ratios) 20 :seed 123) ; see functions.lisp
+  "Flattened list of ratios with some successive values randomly shuffled.")
+
+#|
+(let ((mcr ratios))
+  (list  (* 1.0 (find-min mcr)) (* 1.0 (find-max mcr))))
+;; => min/max ratios: (1.5 1.75)
+  
+(loop for i in listed-ratios collect (length i))
+;; => tendencially increasing length of waves: (4 3 4 4 5 4 5 5 6 5 6 6 7)
+|#
+
+(defparameter numb-trans
+  (gen-transition 3 2 (length ratios) 0.51 :rounded t)
+  "List of transitions for all ratios.")
+
+;; (find-sum numb-trans)
+
+(defparameter trans-ratios
+  (loop for x in numb-trans
+  with l = ratios
+  for i in l ; first value
+  for j in (cdr l) ; second value
+  collect (cdr (gen-transition i j x 1)) into reslis
+    ; cut off the first value = the last of the previous one
+  finally (return (append 
+                   (list (cons (first l) (first reslis)))
+                   ; add the first value to the first list
+                   (cdr reslis)
+                   ; and append it to the rest of the results
+                   )))
+  "Ratios: = Intervals between f2 and f1.
+  Inserted transitions between each value in ratios.
+  Balance the waves with transitions from 3 to 2")
+  
+(defparameter freq1 (pitch-to-hertz 'd4)
+  "Fixed f1 frequency")
+
+(defparameter combtones-chords
+ (comb-tones freq1 (flatten trans-ratios) 2 3 :ratios t :chords t) 
+  "Combination tones for f1 and each ratio as list of freqs
+  (see functions.lisp)")
+
+#|
+;; combtones as chords
+(length
+(flatten
+(chordize
+(hertz-to-pitch
+ combtones-chords :quantize 1/4))))
+
+;; check which pitch is f2
+(pitch-list-plot 
+ (hertz-to-pitch (comb-tones freq1 ratios 1 1 :ratios t))
+ :join-chords t :join-points t)
+
+(setf freq1 (pitch-to-hertz 'd4))
+
+(pitch-list-plot 
+ (hertz-to-pitch
+  (list (list freq1 freq1) (list (* 6/4 freq1) (* 7/4 freq1)))) 
+ :join-points t :join-chords nil)
+|#
+
+(defparameter pitches
+  (reverse
+   (mapcar #'quarter-tone-closest ; see functions.lisp
+           (hertz-to-pitch
+            (sort
+             (matrix-transpose combtones-chords)       
+             '< :key 'first) 
+            :quantize 1/4)))
+  "
+  1. convert the list of combination tones to voices
+  2. sort them from low to high
+  3. convert from frequency to pitch
+  4. Convert pitches with 3 to 1 quartertone alteration 
+  5. reverse these lists according to the score")
+
+#|
+(flatten (chordize (matrix-transpose pitches)))
+
+(ll pitches)
+|#
+
+;;(pitch-list-plot pitches :join-chords t :join-points t)
+
+(defparameter numb-pitches (length combtones-chords)
+  "number of pitches per voice")
+
+(defparameter numb-inst (length pitches)
+  "number of instruments (voices)")
+
+;;; Voices Percussion & Piano
+
+(defparameter combtones-chords-pp
+  (loop for i in
+ (comb-tones freq1 (flatten trans-ratios) 2 6 :ratios t :chords t)
+  collect
+  (loop for j in i 
+    when (> j 0) collect j)))
+
+(defparameter pp-voices
+  (make-omn
+   :pitch (chordize
+           (midi-to-pitch
+            (loop for i in
+              (pitch-to-midi
+               (hertz-to-pitch combtones-chords-pp 
+                               :quantize 1/4))
+              collect
+              (remove-duplicates
+              (loop for j in i
+                when (integerp j)
+                collect j)))))
+   :length '(w) ; '(q -h.)
+   :velocity '(pp)
+   :span :pitch))
+
+(defparameter glsp-1
+  (make-omn
+   :pitch
+   (respell
+    (omn :pitch
+         (ambitus-filter '(d7 c8) pp-voices)))
+   :length '(h. w wq) ; '(q -h.)
+   :velocity '(pp)
+   :span :pitch))
+
+(defparameter glsp-2
+  (make-omn
+   :pitch
+   (respell
+    (omn :pitch
+         (ambitus-filter '(c7 cs7) pp-voices)))
+   :length '(h. w wq) ; '(q -h.)
+   :velocity '(pp)
+   :span :pitch))
+
+(defparameter glsp-3
+  (ambitus-filter '(as6 b6) pp-voices))
+  
+(defparameter glsp-4
+  (ambitus-filter '(gs6 a6) pp-voices))
+
+(defparameter pno-rh-1
+(make-omn
+   :pitch
+   (respell
+    (omn :pitch
+         (ambitus-filter '(ds6 g6) pp-voices)))
+   :length '(wq h. w) ; '(q -h.)
+   :velocity '(pp)
+   :span :pitch))
+
+(defparameter pno-rh-2
+(make-omn
+   :pitch
+   (respell
+    (omn :pitch
+         (ambitus-filter '(fs5 d6) pp-voices)))
+   :length '(wq h. w) ; '(q -h.)
+   :velocity '(pp)
+   :span :pitch))
+
+(defparameter pno-lh-1
+  (ambitus-filter '(b2 b3) pp-voices))
+
+(defparameter pno-lh-2
+  (ambitus-filter '(a0 bb2) pp-voices))
+
+(defparameter vibr-lh-1
+  (ambitus-filter '(ds4 a4) pp-voices))
+
+(defparameter vibr-lh-2
+  (ambitus-filter '(c4 d4) pp-voices))
+
+(defparameter timp
+  (let* ((omn-pitch (omn :pitch      
+                         (ambitus-filter '(d2 a2) pp-voices)))
+         (omn-len (loop for i in omn-pitch
+                    for x from 0
+                    collect
+                    (if (pitchp (first i))
+                      (list (nth (mod x 3) '(h. w wq)))
+                      (list (nth (mod x 3) '(-h. -w -wq)))))))
+    (omn-dictum '((:all trem+gliss))
+                (make-omn 
+                 :pitch (remove nil omn-pitch)
+                 :length omn-len
+                 :velocity '(pp)
+                 :span :length))))
+
+;;; Durations
+
+(defparameter dur3 '3/4)
+(defparameter dur4 '4/4)
+(defparameter dur5 '5/4)
+
+(defparameter dur9 
+  (dev-durations1 3/4 '(16 20) '(3 2 1))
+  "3/4 duration with 2 deviations, (see functions.lisp)")
+
+(defparameter dur6 
+  (mapcar #'cdr dur9)
+  "only the deviations of 3/4, (see functions.lisp)")
+
+(defparameter dur12 
+  (dev-durations1 4/4 '(12 16 20) '(3 2 1))
+  "4/4 duration with 3 deviations, (see functions.lisp)")
+
+(defparameter dur8 
+  (mapcar #'cdr dur12)
+  "only the deviations of 4/4, (see functions.lisp)")
+
+(defparameter dur15 
+  (dev-durations1 5/4 '(10 12 16 20) '(3 2 1))
+  "5/4 duration with 4 deviations, (see functions.lisp)")
+
+(defparameter dur10 
+  (mapcar #'cdr dur15)
+  "only the deviations of 5/4")
+
+(defparameter measures
+  (rnd-sum numb-pitches '(1 2 3) :seed 12)
+  "3 durs randomly chosen fitting the overall number of pitches")
+
+(defparameter durs
+  (matrix-transpose
+   (loop for i in measures
+     initially (init-seed 75911) ;75911
+     with *do-verbose* = nil
+     for x = (case i
+               (1 (list (gen-weight 1 (list (list dur3 10) 
+                                            (list dur4 10)
+                                            (list dur5 14)))))
+               (2 (first
+                   (gen-weight 1 (list (list dur6 10) 
+                                       (list dur8 10)
+                                       (list dur10 14)))))
+               (3 (first 
+                   (gen-weight 1 (list (list dur9 10) 
+                                       (list dur12 10)
+                                       (list dur15 15))))))
+     ; starting counter for all random choices
+     collect (loop repeat numb-inst            
+               collect (rnd-order (rnd-pick x)))))
+  "durations in blocks between dur3 and dur15")
+
+#|
+(loop repeat 20 collect
+(list (gen-weight 1 (list (list dur3 10) 
+                    (list dur4 10)
+                    (list dur5 15)))))
+|#
+
+(defparameter durations (quantize (mcflatten durs) '(1 2 3 4 5)))
+
+(defparameter time-sig
+  (get-time-signature
+   (mclist
+    (flatten
+     (loop for i in (first durs) 
+       for j = (length i) 
+       collect
+       (loop repeat j collect (/ (sum i) j))))))  
+  "get the time signature from the first voice")
+
+(defparameter time-sig-durs
+  (mclist
+  (flatten
+  (loop for i in time-sig
+             collect
+             (loop repeat (first (last i))
+               collect
+               (/ (first i) (second i)))))))
+
+(defparameter glsp-all
+  (let* ((all-pitches 
+          (rnd-order
+           (ambitus-filter '(a0 a7) 
+                           (melodize 
+                            (omn :pitch 
+                                 (ambitus-filter '(gs6 c8)  
+                                                 pp-voices))))
+           :seed 123))
+         (new-durs
+          (loop for i in all-pitches
+            for j in time-sig-durs
+            collect
+            (loop repeat (length i)
+              collect (/ (first j) (length i))))))
+    (make-omn
+     :pitch  all-pitches
+     :length (quantize
+              new-durs 
+              (gen-integer 1 16))
+     :velocity '(pp)
+     :span :length)))
+
+(defparameter vibr-rh-1
+(make-omn
+   :pitch
+   (respell
+    (omn :pitch
+         (ambitus-filter '(ds5 fs5) pp-voices)))
+   :length time-sig-durs
+   :velocity '(pp)
+   :span :pitch))
+
+(defparameter vibr-rh-2
+(make-omn
+   :pitch
+   (respell
+    (omn :pitch
+          (ambitus-filter '(as4 d5) pp-voices)))
+   :length time-sig-durs 
+   :velocity '(pp)
+   :span :pitch))
+
+;;; Dynamics
+
+(defparameter vel-f1
+    (flatten
+     (loop for j in (first durs)     
+       for k from 0 collect
+       (if (evenp k)
+         (loop repeat (- (length j) 1)
+           collect '< into reslis
+           finally (return (cons 'pp< reslis)))
+         (loop repeat (- (length j) 1)
+           collect '> into reslis
+           finally (return (cons 'p> reslis )))))))
+
+(defparameter vels
+  (loop repeat 7
+    initially (init-seed 123)
+    collect
+    (velocity-to-dynamic
+     (gen-weight numb-pitches '((ppp 10) (pp 20)(p 40)(mf 30))))))
+
+(defparameter dummy-vels
+  (cons 'ppp (cdr (loop repeat numb-pitches collect '-)))
+  "One dynamic is necessary otherwise the list is ommited.
+  Can be deleted later.")
+
+(defparameter velocities
+  (list
+   (first vels)
+   (second vels)  
+   (third vels)
+   (fourth vels)
+   dummy-vels
+   vel-f1
+   (sixth vels)
+   (seventh vels)))
+
+;;; Articulations
+;;; (list of possible articulations see User Attributes.lisp)
+
+;;; Glissandi
+
+(defparameter gliss-prob-env
+  (pair-up
+   (envelope-exp
+    (flatten
+    (matrix-transpose
+     (list (gen-integer 10)
+           (reverse '(1 2 3 5 10 20 40 60 80 20 0)))))
+    1.2 (- numb-pitches 1))))
+
+;; (length gliss-prob-env)
+
+(defparameter gliss-prob
+  (mapcar #'round
+          (second
+           (matrix-transpose
+            gliss-prob-env)))
+  "Extracting and rounding probabilities from env.")
+
+;; (list-plot gliss-prob :join-points t :point-radius 2 :style :axis)
+           
+(defparameter glissandi
+  (mcflatten
+   (loop repeat numb-inst
+     initially (init-seed 123)
+     collect
+     (loop for i in gliss-prob    
+       collect
+       (gen-weight 1 (list (list 'gliss i) (list '- 50)))))))
+
+;; (ll glissandi)
+
+;; Test
+#!
+(ps 'gm
+    :multi (make-omn
+            :length (gen-repeat
+                     (length glissandi)
+                     (list (gen-repeat (length (first glissandi)) 'w)))
+            :pitch '((b4))
+            :articulation glissandi)
+    :time-signature '(4 4))
+!#
+
+;;; Tremolos
+
+(defparameter trem-prob-envs
+  (mapcar #'reverse
+  '((  3   5   8   8   5   3   2   2   0   0   0) ; trem-t+trt = 1/32 = 8
+    (  0   3   5  13   8   5   3   2   2   0   0) ; trem-5e+tr5e = 1/40 = 10
+    (  0   2   3   8  21  13   8   5   3   2   0) ; trem-3s+tr3s = 1/48 = 12
+    (  0   2   2   8  13  34  21  13   8   5   0) ; trem-7e+tr7e = 1/56 = 14
+    (  0   0   2   5   8  21  55  34  13   8   5) ; trem-x+trx = 1/64 = 16
+    (100 100 100 100 100 100 100 100 100 100 100) ; -
+    ))
+  "developement of probabilities")
+
+(defparameter xy-trem-probs
+  (loop for i in trem-prob-envs
+    collect
+    (loop for j in i
+      for k from 0
+      collect k
+      collect j))
+  "Add x-values to the probabilities.")
+
+(defparameter trem-probs
+  (loop for i in xy-trem-probs
+    collect
+    (mapcar #'round ;  round for weighted random
+            (second ; select only the y-values
+             (envelope-sample i numb-pitches :type :x-y) 
+             ; taking n samples from the initial envelope xy-probs
+             ))))
+
+(defparameter trem-types
+  '(trem-t+trt
+    trem-5e+tr5e
+    trem-3e+tr3s
+    trem-7e+tr7e
+    trem-x+trx
+    -)
+  "List of articulations.")
+
+(defparameter trem-prob-lists
+  (matrix-transpose ; combine probability list of all articulations at each point
+  (loop for i in trem-probs 
+    for k in trem-types
+    collect
+    (loop for j in i
+      collect (list k j))))
+  "Combine probabilities and articulations for gen-weight.")
+
+(defparameter tremolos
+(mcflatten
+   (loop repeat numb-inst
+     initially (init-seed 2)
+     collect
+  (loop for i in trem-prob-lists
+  collect
+  (gen-weight 1 i)))))
+
+;;(ll tremolos)
+
+;; Test
+#!
+(ps 'gm
+    :multi (make-omn
+            :length (gen-repeat
+                     (length tremolos)
+                     (list (gen-repeat (length (first tremolos)) 'w)))
+            :pitch '((b4))
+            :articulation tremolos)
+    :time-signature '(4 4))
+!#
+
+;;; blow (woods)
+
+(progn
+(defparameter blow-prob-envs
+  (mapcar #'reverse
+  '(( 2   5   13  8   5   8  13   8   5   3  2) ; tone start
+    ( 0   3   8  21  13   8   5   3   2   0  0) ; half-start
+    ( 0   0   5   8  34  13  21  13   8   5  3) ; air-start
+    (50  50  50  50  50  50  50  50  50  50 50) ; ord
+    ))
+  "developement of probabilities")
+
+(defparameter xy-blow-probs
+  (loop for i in blow-prob-envs
+    collect
+    (loop for j in i
+      for k from 0
+      collect k
+      collect j))
+  "Add x-values to the probabilities.")
+
+(defparameter blow-probs
+  (loop for i in xy-blow-probs
+    collect
+    (mapcar #'round ;  round for weighted random
+            (second ; select only the y-values
+             (envelope-sample i numb-pitches :type :x-y) 
+             ; taking n samples from the initial envelope xy-probs
+             ))))
+
+(defparameter blow-types
+  '((tone-air-tone ; ●⟹○⟹●
+     tone-air-half ; ●⟹○⟹◐
+     tone-half-tone ; ●⟹⌀⟹●
+     tone-air ; ●⟹○
+     )
+    (half-tone-half ; ⌀⟹●⟹⌀
+     half-tone-air ; ⌀⟹●⟹○
+     half-air-half ; ⌀⟹○⟹⌀
+     half-air-tone ; ⌀⟹○⟹●
+     )
+    (air-tone-air ; ○⟹●⟹○
+     air-tone-half ; ○⟹●⟹⌀
+     air-half-air ; ○⟹⌀⟹○
+     air-tone ; ○⟹●
+     )
+    -)
+  "List of sound articulations.")
+
+(defparameter blow-prob-lists
+  (matrix-transpose ; combine probability list of all articulations at each point
+  (loop for i in blow-probs 
+    for k in blow-types
+    collect
+    (loop for j in i
+      for z = (if (listp k) 
+                (nth (rnd1 :low 0 :high (- (length k) 1)) k)
+                k)
+      collect (list z j))))
+  "Combine probabilities and articulations for gen-weight.")
+
+(defparameter blows
+(mcflatten
+   (loop repeat 4
+     initially (init-seed 123)
+     collect
+  (loop for i in blow-prob-lists
+  collect
+  (gen-weight 1 i)))))
+
+;;; bows (strings)
+
+(defparameter bow-prob-envs
+    (mapcar #'reverse
+  '(( 2   5   13  8   5   8  13   8   5   3  2) ; tasto start
+    ( 0   3   8  21  13   8   5   3   2   0  0) ; ord start
+    ( 0   0   5   8  34  13  21  13   8   5  3) ; pont start
+    (50  50  50  50  50  50  50  50  50  50 50) ; ord
+    ))
+  "developement of probabilities")
+
+(defparameter xy-bow-probs
+  (loop for i in bow-prob-envs
+    collect
+    (loop for j in i
+      for k from 0
+      collect k
+      collect j))
+  "Add x-values to the bowing probabilities.")
+
+(defparameter bow-probs
+  (loop for i in xy-bow-probs
+    collect
+    (mapcar #'round ;  round for weighted random
+            (second ; select only the y-values
+             (envelope-sample i numb-pitches :type :x-y) 
+             ; taking n samples from the initial envelope xy-probs
+             ))))
+
+(defparameter bow-types
+  '((t-o ; t⟹o
+     t-p ; t⟹p
+     t-o-t ; t⟹o⟹t
+     t-p-o ; t⟹p⟹o
+     t-p-t ; t⟹p⟹t
+     )   
+    (o-p ; o⟹p
+     o-t ; o⟹t
+     o-t-o ; o⟹t⟹o
+     o-p-o ; o⟹p⟹o
+     o-t-p ; o⟹t⟹p
+     o-p-t ; o⟹p⟹t
+     )
+    (p-o ; p⟹o
+     p-t ; p⟹t
+     p-o-p ; p⟹o⟹p
+     p-t-o ; p⟹t⟹o
+     p-t-p ; p⟹t⟹p
+     )
+    -)
+  "List of sound articulations.")
+
+(defparameter bow-prob-lists
+  (matrix-transpose ; combine probability list of all articulations at each point
+  (loop for i in bow-probs 
+    for k in bow-types
+    collect
+    (loop for j in i
+      for z = (if (listp k) 
+                (nth (rnd1 :low 0 :high (- (length k) 1)) k)
+                k)
+      collect (list z j))))
+  "Combine probabilities and articulations for gen-weight.")
+
+(defparameter bows
+(mcflatten
+   (loop repeat 4
+     initially (init-seed 579)
+     collect
+  (loop for i in bow-prob-lists
+  collect
+  (gen-weight 1 i))))
+  "bow articulations")
+
+(defparameter var-tones
+  (assign-variable 'tones (append blows bows))
+  "combine blow (woods) and bow (strings) atriculations into variables")
+
+(defparameter tones
+  (list tones0 tones4 tones1 tones2 tones5 tones6 tones3 tones7)
+  "sort tone variables according to the voices: fl vl cl ob vla (vla) tsax vc")
+)
+
+;; Test
+#!
+(ps 'gm    
+    :multi
+    (make-omn
+     :length (gen-repeat
+              (length var-tones)
+              (list (gen-repeat (length (eval (first var-tones))) 'w)))
+     :pitch '((b4))
+     :articulation (mapcar #'eval var-tones))
+    :time-signature '(4 4))
+!#
+
+;;; Vibrato
+
+(progn
+(defparameter vib-prob-envs
+ (mapcar #'reverse
+  '((08 21 54 34 21 13 08 05 08 05 03) ; vibs
+    (50 50 50 50 50 50 50 50 50 50 50) ; non vib
+    ))
+  "general developement of weighted probabilities")
+
+(defparameter xy-vib-probs
+  (loop for i in vib-prob-envs
+    collect
+    (loop for j in i
+      for k from 0
+      collect k
+      collect j))
+  "Add x-values to the probabilities.")
+
+(defparameter vib-probs
+  (loop for i in xy-vib-probs
+    collect
+    (mapcar #'round ;  round for weighted random
+            (second ; select only the y-values
+             (envelope-sample i numb-pitches :type :x-y) 
+             ; taking n samples from the  envelope xy-vib-probs
+             ))))
+
+(defparameter vib-art
+  '(non-vib ; non-vib  
+    nv-v-nv ; non vib⟹vib⟹non vib
+    v-nv ; v⟹nv 
+    v-mv-nv ; v⟹mv⟹nv 
+    nv-v ; nv⟹v
+    nv-mv-nv ; nv⟹mv⟹nv
+    v-nv-v ; v⟹nv⟹v
+    nv-mv-v ; nv⟹mv⟹v  
+    mv-nv-v ; mv⟹nv⟹v
+    mv-nv ; mv⟹nv  
+    v-mv-v ; v⟹mv⟹v
+    mv-v ; mv⟹v
+    nv-mv ; nv⟹mv
+    v-mv ; v⟹mv
+    v-nv-mv ; v⟹nv⟹mv 
+    mv-v-mv ; mv⟹v⟹mv
+    mv-nv-mv ; mv⟹nv⟹mv
+    )
+  "List of 17 vibrato articulations, sorted from less to more")
+
+(defparameter vib-articulations
+  (gen-palindrome (reverse vib-art))
+  "Palindrome of the vib-articulations, 33 vibratos: less ⟹ more ⟹ less."
+  )
+
+(defparameter vib-ids
+  (let* ((len-vib-art (- (length vib-articulations) 1))
+         (tend-ids (mapcar #'round 
+                           (gen-tendency numb-pitches (list 0.1 len-vib-art) 
+                                         :variance 0.5 :seed 123))))
+    (loop for i in tend-ids collect (min i len-vib-art)))
+  "Tendency of IDs from start to end in the vib-articulations list."
+  )
+
+(defparameter vib-art-probs
+  (matrix-transpose 
+   ; combine probability list of all articulations at each point
+  (loop for i in vib-probs
+    for x from 0
+    collect
+    (loop for j in i
+      for y from 0
+      when (= x 0)
+      collect (list (nth (nth y vib-ids) vib-articulations) j)
+      ; combine the probabilities with the according articulation
+      when (= x 1)
+      collect (list '- j))))
+  "Combine probabilities and articulations for gen-weight.")
+
+(defparameter weighted-vibs
+  (loop repeat numb-inst
+    initially (init-seed 73)
+    collect
+    (flatten
+     (loop for i in vib-art-probs   
+       collect
+       (gen-weight 1 i)))))
+
+(defparameter vibratos
+(loop for i in weighted-vibs
+  collect (position-replace '(0) '(non-vib) i)))
+)
+
+#!
+;; Test
+(ps 'gm
+    :multi (make-omn
+            :length (gen-repeat
+                     (length vibratos)
+                     (list (gen-repeat (length (first vibratos)) 'w)))
+            :pitch '((b4))
+            :articulation vibratos)
+    :time-signature '(4 4))
+!#
+
+;;; Merge Attributes
+
+(defparameter merged-articulations
+  (merge-attributes glissandi tremolos tones vibratos)
+  "merge all articulations for each voice")
+
+;; (ll merged-articulations)
+
+(defparameter dummy-articulations
+  (cons 'arrow (cdr (loop repeat numb-pitches collect '-)))
+  "Make a dummy articulation list for the upper voice of the viola
+  with an arrow at the beginning (to be manually DELETED LATER).")
+
+(defparameter articulations
+  (list-replace-at merged-articulations 5 (list dummy-articulations))
+  "Replace the articulation list of the upper voice of the viola
+  with the dummy articulation list.")
+ 
+;;; Voices
+    
+(defparameter omn
+  (make-omn
+   :pitch pitches
+   :length durations
+   :velocity velocities
+   :articulation articulations)
+  "Create omn voices.")
+
+(defparameter voices (assign-variable 'voice omn)
+  "assign variable for each voice")
+
+;;; Score
+
+#!
+;; Preview
+(ps 'gm
+    :multi voices
+    :time-signature time-sig
+    :tempo 60)
+!#
+
+(def-score licht
+           (
+            :key-signature 'chromatic
+            :time-signature time-sig
+            :tempo 60
+            :layout (list
+                     (bracket-group
+                      (flute-layout 'fl)
+                      (oboe-layout 'ob)
+                      (clarinet-layout 'cl)
+                      (tenor-sax-layout 'tsax))
+                     (bracket-group
+                      (glockenspiel-layout
+                       'glocken-all)
+                      (glockenspiel-layout
+                       (list 'glockenspiel-1 'glockenspiel-2))
+                      (glockenspiel-layout
+                       (list 'glockenspiel-3 'glockenspiel-4)))
+                     (bracket-group
+                      (vibraphone-single-layout 
+                       (list 'vibra-rh-1 'vibra-rh-2))
+                      (vibraphone-single-layout 
+                       (list 'vibra-lh-1 'vibra-lh-2)))
+                     (timpani-layout 'timp)
+                     (bracket-group
+                      (piano-single-layout 
+                       (list 'piano-rh-1 'piano-rh-2))
+                      (bass-layout 
+                       (list 'piano-lh-1 'piano-lh-2)))
+                     (bracket-group
+                      (violin-layout 'vn)
+                      (viola-solo-layout (list 'va1 'va2))
+                      (violoncello-layout 'vc)))
+            )
+
+  (fl :omn voice0 :channel 1 :sound 'gm :program 'flute) 
+  (ob :omn voice3 :channel 2 :program 'oboe)
+  (cl :omn voice2 :channel 3 :program 'clarinet)
+  (tsax :omn voice6 :channel 4 :program 'tenor-sax)
+  (glocken-all :omn glsp-all :channel 5 :program 'glockenspiel)
+  (glockenspiel-1 :omn glsp-1 :channel 5 :program 'glockenspiel)
+  (glockenspiel-1 :omn glsp-1 :channel 5 :program 'glockenspiel)
+  (glockenspiel-2 :omn glsp-2 :channel 5 :program 'glockenspiel)
+  (glockenspiel-3 :omn glsp-3 :channel 5 :program 'glockenspiel)
+  (glockenspiel-4 :omn glsp-4 :channel 5 :program 'glockenspiel)
+  (vibra-rh-1 :omn vibr-rh-1 :channel 6 :program 'vibraphone)
+  (vibra-rh-2 :omn vibr-rh-2 :channel 6 :program 'vibraphone)
+  (vibra-lh-1 :omn vibr-lh-1 :channel 7 :program 'vibraphone)
+  (vibra-lh-2 :omn vibr-lh-2 :channel 7 :program 'vibraphone)
+  (timp :omn timp :channel 8 :program 'timpani)
+  (piano-rh-1 :omn pno-rh-1 :channel 9 :program 'grand)
+  (piano-rh-2 :omn pno-rh-2 :channel 9 :program 'grand)
+  (piano-lh-1 :omn pno-lh-1 :channel 10 :program 'grand)
+  (piano-lh-2 :omn pno-lh-2 :channel 10 :program 'grand)
+  (vn :omn voice1 :channel 11 :program 'violin)
+  (va1 :omn voice4 :channel 12 ::program 'viola)
+  (va2 :omn voice5 :channel 13 ::program 'viola)
+  (vc :omn voice7 :channel 14 :program 'cello)
+  )
+
+;;; Calculate duration
+(let* ((dursec (* 4  (get-span (first durs) :sum t)))
+       (minutes (floor (/ dursec 60)))
+       (seconds (- dursec (* minutes 60))))                
+  (format t "Duration: ~F min ~F sec " minutes seconds))
+
+#!
+(with-open-file 
+    (file "~/Documents/projekte/03-kammermusik5-9/AB93-Plain/opmo/xml/licht.xml" 
+          :direction :output 
+          :if-exists :supersede)
+  (score-to-musicxml (get-score 'licht) file))
+
+(pprint-score 'licht)
+!#
+

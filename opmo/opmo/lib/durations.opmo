@@ -1,0 +1,156 @@
+
+;;; Durations
+
+(defparameter numb-events 50)
+
+(defparameter sts (sum-to-size numb-events 3)
+  "Number of events divided in 3 possible equal numbers.")
+
+(defparameter measures
+  (loop for i in sts 
+    initially (init-seed 123)
+    collect
+  (rnd-sum i '(1 2 3)))
+  "3 durs randomly chosen fitting the overall number of events")
+
+(defparameter dur3 '(3/4))
+(defparameter dur4 '(4/4))
+(defparameter dur5 '(5/4))
+
+(defun dev-durations (ratio quant dev &key (flat t))
+  "Calculate a list of quantified deviations from a ratio.
+
+  Args:
+  ratio: ratio = measure
+  quant: (list of) quantized deviations (divisor of 1)
+  dev: deviation from quant, e.g. -1 = -1/16
+  flat: default t = results in a flat list
+
+  Examples:
+  (dev-durations 3/4 16 '(-1 1))
+  (dev-durations 3/4 '(12 16 20) '(-1 1))
+  (dev-durations 4/4 '(12 16 20) '(-1 1) :flat nil) "
+
+  (let ((quant-lst (if (numberp quant) (list quant) quant))
+        ; force to list if quantisations, divisions of 1 = 4/4
+        (dev-lst (if (numberp dev) (list dev) dev)))
+    ;deviation list measured by quantisation e.g.  +1 => + 1/16
+    (loop for q in quant-lst
+      for result = (cons ratio ; add original ratio
+                         (loop for i in dev-lst
+                           for rq = (* ratio q)
+                           collect (* (/ (+ rq i) rq) ratio)))
+      if flat appending result ; result as flat list
+      else collect result))) ; result with nested lists
+
+(defparameter dur9 
+  (dev-durations 3/4 '(16 20) '(-1 1) :flat nil)
+  "3/4 duration with 2 deviations, (see functions.lisp)")
+
+(defparameter dur6 
+  (mapcar #'cdr (dev-durations 3/4 '(16 20) '(-1 1) :flat nil))
+  "only the deviations of 3/4, (see functions.lisp)")
+
+(defparameter dur12 
+  (dev-durations 4/4 '(12 16 20) '(-1 1) :flat nil)
+  "4/4 duration with 3 deviations, (see functions.lisp)")
+
+(defparameter dur8 
+  (mapcar #'cdr (dev-durations 4/4 '(12 16 20) '(-1 1) :flat nil))
+  "only the deviations of 4/4, (see functions.lisp)")
+
+(defparameter dur15 
+  (dev-durations 5/4 '(10 12 16 20) '(-1 1) :flat nil)
+  "5/4 duration with 4 deviations, (see functions.lisp)")
+
+(defparameter dur10 
+  (mapcar #'cdr (dev-durations 5/4 '(10 12 16 20) '(-1 1) :flat nil))
+  "only the deviations of 5/4")
+
+(defparameter durs
+ (loop for i in measures
+   initially (init-seed 13)
+   for j from 0
+   collect
+   (loop for k in i 
+     when (= j 0) collect
+     (case k
+             (1 dur3)
+             (2 (rnd-pick dur6))
+             (3 (rnd-pick dur9)))
+     when (= j 1) collect
+      (case k
+             (1 dur4)
+             (2 (rnd-pick dur8))
+             (3 (rnd-pick dur12)))
+     when (= j 2) collect
+      (case k
+             (1 dur5)
+             (2 (rnd-pick dur10))
+             (3 (rnd-pick dur15))))))
+
+(defun matra (llst &key (type 'shortest))
+  "Matrix-transpose operation.
+  
+  Types: 
+  'shortest (default): depending on the shortest list (omitting values from longer lists)
+  'longest: depending on the longest list (adding NILs to shorter lists)
+  'trunc: depending on the longest list (removing NILs from shorter lists)
+
+  Examples:
+  (matra '((1 2 3 4) (5 6 7 8 9) (10 11 12 13 14 15)))
+  => ((1 5 10) (2 6 11) (3 7 12) (4 8 13))
+  (matra '((1 2 3 4) (5 6 7 8 9) (10 11 12 13 14 15)) :type 'longest)
+  => ((1 5 10) (2 6 11) (3 7 12) (4 8 13) (nil 9 14) (nil nil 15))
+  (matra '((1 2 3 4) (5 6 7 8 9) (10 11 12 13 14 15)) :type 'trunc)
+  => ((1 5 10) (2 6 11) (3 7 12) (4 8 13) (9 14) (15))"
+  
+  (let ((minlen (apply #'min 
+                (loop for i in llst 
+                  collect (length i))))
+        (maxlen (apply #'max 
+                (loop for i in llst 
+                  collect (length i)))))
+    (case type
+      (shortest  
+       (loop for i from 0 to (- minlen 1) 
+         collect
+         (loop for j in llst collect (nth i j))))
+      (longest
+       (loop for i from 0 to (- maxlen 1) 
+         collect
+         (loop for j in llst collect (nth i j))))
+      (trunc
+       (loop for i from 0 to (- maxlen 1) 
+         collect
+         (remove nil (loop for j in llst collect (nth i j))))))))
+
+(defparameter rhythms
+  (quantize
+   (loop repeat 3
+     initially (init-seed 123)
+     collect
+     (flatten
+      (matra
+       (mcflatten 
+        (rnd-order durs))
+       :type 'trunc))) '(1 2 3 4 5)))
+
+;; (mapcar #'length rhythms)
+;; (find-sum rhythms)
+
+(defparameter durations
+  (make-omn
+   :length rhythms
+   :pitch '(a4)))
+
+(defparameter time-sig
+  (loop repeat numb-events
+    for x from 0
+    with ts = '((3 4) (4 4) (5 4))
+    collect (append (nth (mod x (length ts)) ts) (list 1))))
+
+(ps 'gm
+   :multi durations
+   :time-signature time-sig
+   :tempo 60)

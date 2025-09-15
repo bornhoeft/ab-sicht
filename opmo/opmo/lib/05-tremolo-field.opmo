@@ -1,0 +1,278 @@
+;;---------------------------------------------------------
+;;; AB84 - Plain
+;;; Copyright © 2020/21 Achim Bornhoeft
+;;;
+;;; 04-tremolo-field
+;;;
+;;;--------------------------------------------------------
+
+
+;;;--------------------------------------------------------
+;;; Settings
+;;;--------------------------------------------------------
+
+(defparameter instrument-ranges
+      (list
+       (ambitus-instrument 'bass-flute :type :pitch)
+       (ambitus-instrument 'oboe :type :pitch)
+       (ambitus-instrument 'baritone-sax :type :pitch)
+       (ambitus-instrument 'bass-clarinet :type :pitch)
+       (ambitus-instrument 'violin :type :pitch)
+       (ambitus-instrument 'viola :type :pitch)
+       (ambitus-instrument 'cello :type :pitch)))
+
+;; ((bb2 cs5) (bb3 d7) (cs2 a4) (bb1 cs6) (g3 g7) (c3 a6) (c2 fs6)) 
+
+(defparameter inst-ranges
+  (matrix-transpose
+  '((bfl 8 9)
+    (ob 14 15)
+    (bsax 7 8)
+    (bcl 3 6)
+    (vl 10 13)
+    (va 6 7)
+    (vc 2 3))))
+
+;; number of beat groups
+(defparameter beat-groups 15)
+
+(defparameter beats '(1 2 5))
+
+(defparameter divisors '(4 5 6 7))
+
+(defparameter steps '(1 2))
+
+(defparameter pitch-pairs '(3 4 5 6 7))
+
+;;;--------------------------------------------------------
+;;; Durations
+;;;--------------------------------------------------------
+
+(defun brownian-borders (n weight-list start low high &key seed)
+  (let ((wlis (loop for j from 0 below (- (length weight-list) 1) by 2
+                append 
+                (make-list (nth (+ 1 j) weight-list) 
+                           :initial-element (nth j weight-list)) 
+                into reslis
+                finally (return reslis))))
+    (loop repeat n
+      initially (rnd-seed seed)
+      with s = start
+      do (setf s (if (< s low) 
+                   (+ low (abs (- s low)))
+                   (if (> s high) 
+                     (- high (abs (- s high)))
+                     s)))
+      collect s into reslis
+      do (setf s (+ s (nth (random* (length wlis) :seed (seed)) wlis)))
+      finally (init-seed nil) 
+      (return reslis))))
+
+;; (brownian-borders 50 '(1 40 -1 40 2 20 -2 20) 10 5 15 :seed 123)
+
+(defparameter durations
+  (loop repeat (length instrument-ranges)
+    initially (rnd-seed 111)
+    for st = (rnd-pick steps :seed (seed))
+    with fb = (first beats)
+    with lb = (first (last beats))
+    with fd = (first divisors)
+    with ld = (first (last divisors))
+    for bts = (brownian-borders beat-groups '(1 50 -1 50) (rnd-pick beats :seed (seed)) fb lb :seed (seed))
+    for divs = (brownian-borders beat-groups (list st 55 (* -1 st) 45) (rnd-pick divisors :seed (seed)) fd ld :seed (seed))
+    collect (loop for i in bts
+              for j in divs
+              append
+              (loop repeat i
+                append
+                (loop repeat j
+                  collect (/ (/ 1 j) 4))))))
+
+(defun random-sum2 (lst-sum lis &key seed)
+  "Try to build a list containing the numbers in lis with the sum of lst-sum."
+  (loop with sum
+    initially (rnd-seed seed)
+    for x = (loop
+              with s
+              collect (nth (random* (length lis) :seed (seed)) lis) into reslis
+              do (setf s (reduce #'+ reslis))
+              until (>= s lst-sum)
+              finally (return reslis)) 
+    do (setf sum (reduce #'+ x))
+    do (print x)
+    until (= sum lst-sum)
+    finally (return x)))
+
+;; (random-sum2 20 '(7 3 8)) => (7 3 7 3) or (3 3 8 3 3)
+
+(defparameter durlis 
+  (loop for i in durations
+    collect (random-sum2 (length i) pitch-pairs :seed 123)))
+
+;;;--------------------------------------------------------
+;;; Pitches
+;;;--------------------------------------------------------
+
+(defparameter fund (pitch-to-hertz 'c0)) ; 16.351597
+
+(defun spec-intrvl (fund start-harm harms harm-intrvl &optional (numb-harm? t))
+  "fund = funadmental, start-harm = start harmonic, harms = number of harmonics or if (numb-harm? nil) nth harmonic,
+  harm-intrvl = list of harmonic intervals, numb-harm? = number of harmonics or nth harmonic (default t)."
+  (let ((harm-intrv (if (numberp harm-intrvl) (list harm-intrvl) harm-intrvl)))
+    (if numb-harm?
+      (loop repeat harms
+        with x = start-harm
+        for i from 0
+        for j = (nth (mod i (length harm-intrv)) harm-intrv)
+        collect (* fund x)
+        do (setf x (+ x j)))
+      (loop with x = start-harm
+        for i from 0
+        for j = (nth (mod i (length harm-intrv)) harm-intrv)
+        collect (* fund x) into reslis
+        do (setf x (+ x j))
+        until (>= x (+ harms 1))
+        finally (return reslis)))))
+
+;; (spec-intrvl 10 3 10 '(1 1 9)) => (30 40 50 140 150 160 250 260 270 360) = 10 harmonics
+;; (spec-intrvl 10 3 10 '(1 1 5) nil) => (30 40 50 100) = upto <= 10. harmonic
+;; (spec-intrvl 10 1 10 1 nil) => (10 20 30 40 50 60 70 80 90 100) = upto the 10. harmonic
+
+(defparameter spectrum 
+  (hertz-to-pitch (spec-intrvl fund 3 40 1 t) :quantize 1/2))
+
+(defparameter spect-id
+  (loop for i in spectrum
+    for j from 1
+    collect (list j i)))
+
+#!
+((1 g1) (2 c2) (3 e2) (4 g2) (5 a2+) (6 c3) (7 d3) (8 e3) (9 f3+) (10 g3) (11 gs3+) (12 a3+) (13 b3) (14 c4) (15 cs4) (16 d4) (17 eb4) (18 e4) (19 e4+) (20 f4+) (21 fs4+) (22 g4) (23 g4+) (24 gs4+) (25 a4) (26 a4+) (27 as4+) (28 b4) (29 b4+) (30 c5) (31 c5+) (32 cs5) (33 cs5+) (34 d5) (35 d5+) (36 eb5) (37 ds5+) (38 e5) (39 e5+) (40 e5+))
+!#
+
+(defun nls (start end)
+  "Creates a list of numbers between start and end."
+  (loop for i from start to end
+    collect i))
+
+(defparameter inst-ids
+  (loop for i in (second inst-ranges)
+    for j in (third inst-ranges)
+    collect (nls i j)))
+
+;;;--------------------------------------------------------
+;;; Pitches for sustained notes in Soundscape 1 (Roomtone)
+;;;--------------------------------------------------------
+
+(setf sus-pitches
+      (loop for i in inst-ids collect (nth (first i) spectrum)))
+
+;;; (fs3 cs4 e3 g2 gs3 d3 e2)
+
+;;;--------------------------------------------------------
+
+(defparameter pitchlis
+  (loop for i in inst-ids
+    collect  (gen-divide 2 i)))
+
+;; collect IDs in harmonic series
+(defparameter tremolos
+  (loop for i in durlis
+    for j in pitchlis
+    collect
+    (loop for k in i
+      for l from 0
+      append
+      (loop repeat k
+        for m from 0
+        collect (nth (mod m 2) (nth (mod l (length j)) j))))))
+
+;; collect pitches from IDs
+(defparameter pitches
+  (loop for i in tremolos
+    collect
+    (loop for j in i
+      collect (nth j spectrum))))
+
+
+;;;--------------------------------------------------------
+;;; Voices
+;;;--------------------------------------------------------
+
+;; make omn-voices
+(setf vox (make-omn
+              :pitch pitches
+              :length (mcflatten durations)
+              :velocity '(ppp)))
+
+;; assign variable for each voice
+(setf voices (assign-variable 'voice vox))
+
+;; set time-signature for each instrument
+(setf 
+ bfl  (omn-to-time-signature voice0 '(4 4))
+ ob   (omn-to-time-signature voice1 '(4 4))
+ bsax (omn-to-time-signature voice2 '(4 4))
+ bcl  (omn-to-time-signature voice3 '(4 4))
+ vn   (omn-to-time-signature voice4 '(4 4))
+ va   (omn-to-time-signature voice5 '(4 4))
+ vc   (omn-to-time-signature voice6 '(4 4))
+ )
+
+;;;--------------------------------------------------------
+;;; Score
+;;;--------------------------------------------------------
+
+
+;; see "GM Instrument Set.lisp" for list of available instruments
+#|
+(ps 'gm-ab
+    :bfl (list bfl)
+    :ob (list ob)
+    :bsax (list bsax)
+    :bcl (list bcl)
+    :vn (list vn)
+    :va (list va)
+    :vc (list vc)
+    :time-signature '(4 4)
+    :tempo 60)
+|#
+
+(progn
+  (def-score 05-tremolo-field
+             (
+              :key-signature 'chromatic
+              :time-signature '(4 4)
+              :tempo 60
+              :layout (list
+                       (bracket-group
+                        (bass-flute-layout 'bfl)
+                        (oboe-layout 'ob)
+                        (baritone-sax-layout 'bsax)
+                        (bass-clarinet-layout 'bcl))
+                       (bracket-group
+                        (violin-layout  'vn)
+                        (viola-layout 'va)
+                        (violoncello-layout 'vc)))
+              )
+    
+    (bfl :omn bfl :channel 1 :sound 'gm :program 'flute) 
+    (ob :omn ob :channel 2 :program 'oboe) 
+    (bsax :omn bsax :channel 3 :program 'baritone-sax) 
+    (bcl :omn bcl :channel 4 :program 'clarinet)
+    (vn :omn vn :channel 5 :program 'violin)
+    (va :omn va :channel 6 :program 'viola)
+    (vc :omn vc :channel 7 :program 'cello) 
+    )
+  (audition-musicxml-last-score)
+  ) 
+
+
+(progn
+  (with-open-file 
+      (file "~/Documents/projekte/03-kammermusik5-9/AB93-Plain/opmo/xml/05-tremolo-field.xml" 
+            :direction :output :if-exists :supersede)
+    (score-to-musicxml (get-score '05-tremolo-field) file))
+  (last-score-to-sibelius))
+
+;; (pprint-score '05-tremolo-field)

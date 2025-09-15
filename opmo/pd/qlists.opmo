@@ -1,0 +1,55 @@
+
+(defun dx-x (ls &optional (st 0))
+  "Constructs a list of numbers from <start> with the consecutives intervals of <ls>.
+  <ls> can also be a list of lists of intervals. Used convert rhythms to entry points."
+  (labels ((dx-x-fun (ls &optional (st 0))
+             (let ((r st))     
+               (loop for i in ls
+                 for n = (+ r i)
+                 collect n into reslis
+                 do (setf r n)
+                 finally (return (cons st reslis))))))
+    (if (numberp (first ls))
+      (dx-x-fun ls st)
+      (loop for i in ls collect (dx-x-fun i st)))))
+
+(setf initial-delays (reverse (gen-transition 1000 20000 7 1.6462 :rounded t)))
+
+;;(find-sum initial-delays)
+
+(setf initial-delays1
+(dx-x (cdr initial-delays) (first initial-delays)))
+
+(setf initial-delays2
+      (loop for i in initial-delays1
+        collect (round (* 0.75 i))))
+
+(setf initial-delays3
+      (loop for i in initial-delays1
+        collect (round (* 0.5 i))))
+
+(setf initial-delays4
+      (loop for i in initial-delays1
+        collect (round (* 0.25 i))))
+
+
+
+(defun comb-to-sum (n &key (reps t))
+  (let* ((nums (gen-integer 1 n))
+         (x 0)
+         (result
+          (find-unique
+           (sort-asc
+            (flatten-sublist
+             (loop repeat n
+               for i = (combination2 (incf x) nums)
+               collect (loop for c in i
+                         if (= (sum c) n)
+                         collect c)))))))
+    (if reps
+      result
+      (loop for i in result
+        when (equal (sum (remove-duplicates i)) n)
+        collect i))))
+
+(comb-to-sum 5 :reps nil) ; => ((5) (1 4) (2 3))
