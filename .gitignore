@@ -3,6 +3,7 @@
 
 # ignore temporary Opusmodus files
 *.opmo~
+*.lisp~
 
 # ignore temporary Reaper files
 *.RPP-bak
