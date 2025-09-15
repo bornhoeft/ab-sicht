@@ -1,3 +1,16 @@
+# ignore mac desktop files
+.DS_Store
+
+# ignore temporary Opusmodus files
+*.opmo~
+
+# ignore temporary Reaper files
+*.RPP-bak
+*.reapeaks
+
+# ignore lib directories (and its subdirectories)
+lib/**
+
 *.FASL
 *.fasl
 *.lisp-temp
